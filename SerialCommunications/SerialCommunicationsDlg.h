@@ -37,4 +37,8 @@ public:
 	afx_msg void OnEnChangeEditReceived();
 	CComboBox m_combo_port;
 	afx_msg void OnCbnSelchangeComboPort();
+	CComboBox m_combo_baud;
+	CComboBox m_combo_data_bits;
+	CComboBox m_combo_stop_bits;
+	CComboBox m_combo_parity;
 };
