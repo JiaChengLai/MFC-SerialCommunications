@@ -3,12 +3,13 @@
 //
 
 #pragma once
+#include "CMscomm.h"
 
 
 // CSerialCommunicationsDlg 对话框
 class CSerialCommunicationsDlg : public CDialogEx
 {
-// 构造
+	// 构造
 public:
 	CSerialCommunicationsDlg(CWnd* pParent = nullptr);	// 标准构造函数
 
@@ -17,7 +18,7 @@ public:
 	enum { IDD = IDD_SERIALCOMMUNICATIONS_DIALOG };
 #endif
 
-	protected:
+protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
 
 
@@ -31,14 +32,45 @@ protected:
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
 public:
-	afx_msg void OnEnChangeRichedit21();
-	afx_msg void OnBnClickedButton1();
-	afx_msg void OnEnChangeEdit2();
-	afx_msg void OnEnChangeEditReceived();
 	CComboBox m_combo_port;
-	afx_msg void OnCbnSelchangeComboPort();
 	CComboBox m_combo_baud;
 	CComboBox m_combo_data_bits;
 	CComboBox m_combo_stop_bits;
 	CComboBox m_combo_parity;
+	CString m_edit_rxdata;// 接收框数据
+	CString m_edit_txdata;// 发送框数据
+	CStatic m_static_status_indicator;
+	CEdit m_edit_filePath;
+	CMscomm m_mscomm;
+
+	// 控件点击选择事件
+	afx_msg void OnBnClickedButtonClearTxdata();
+	afx_msg void OnBnClickedButtonClearRxdata();
+	afx_msg void OnBnClickedButtonOpen();
+	afx_msg void OnBnClickedButtonTransmit();
+
+	afx_msg void OnCbnSelchangeComboPort();
+	afx_msg void OnCbnSelchangeComboBaudRate();
+	afx_msg void OnCbnSelchangeComboDataBits();
+	afx_msg void OnCbnSelchangeComboStopBits();
+	afx_msg void OnCbnSelchangeComboParity();
+	afx_msg void OnBnClickedButtonOpenFile();
+	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
+
+	// 自定义函数
+	// 创建一个从COM1-COM255的字符串数组，用于初始化 端口ComboBox
+	char** CSerialCommunicationsDlg::initComboPortParam(char** ppchPortParamArr);
+	// 根据数组初始化ComboBox组件，nInitialCurrentSele为ComboxBox默认选中项
+	void CSerialCommunicationsDlg::initComboBox(CComboBox* pCComboBox, char* pchParam[], int nArrSize, int nInitialCurrentSele);
+	// 调用initComboBox()，初始化界面上所有的ComboBox选项及默认选中项
+	void CSerialCommunicationsDlg::initAllComboBoxes();
+	// 初始化MsComm组件
+	void CSerialCommunicationsDlg::initMsComm(CMscomm* pMscomm, const struct StructComboBoxOptions structComboBoxOptions);
+	
+	DECLARE_EVENTSINK_MAP()
+	// 当接收缓冲区超过限定值时 调用此函数
+	void OnComm();	struct StructComboBoxOptions getComboBoxSelectedOptions();
+	void CSerialCommunicationsDlg::resetMsComm();
+	void CSerialCommunicationsDlg::scrollRxDataEditControlToBottom();
+	void CSerialCommunicationsDlg::updateStatusIndicator(const struct StructComboBoxOptions structComboBoxOptions);
 };
