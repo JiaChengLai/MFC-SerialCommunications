@@ -50,9 +50,6 @@
     <ClCompile Include="pch.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Utils.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="CMscomm.cpp">
       <Filter>源文件</Filter>
     </ClCompile>

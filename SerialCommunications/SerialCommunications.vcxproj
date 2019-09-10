@@ -207,9 +207,6 @@
     </ClCompile>
     <ClCompile Include="SerialCommunications.cpp" />
     <ClCompile Include="SerialCommunicationsDlg.cpp" />
-    <ClCompile Include="Utils.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="SerialCommunications.rc" />

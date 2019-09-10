@@ -39,7 +39,8 @@ public:
 	CComboBox m_combo_parity;
 	CString m_edit_rxdata;// 接收框数据
 	CString m_edit_txdata;// 发送框数据
-	CStatic m_static_status_indicator;
+	CStatic m_static_status_indicator;// 状态指示器
+	CStatic m_static_file_status_indicator;// 文件发送状态指示器
 	CEdit m_edit_filePath;
 	CMscomm m_mscomm;
 
@@ -55,6 +56,7 @@ public:
 	afx_msg void OnCbnSelchangeComboStopBits();
 	afx_msg void OnCbnSelchangeComboParity();
 	afx_msg void OnBnClickedButtonOpenFile();
+	afx_msg void OnBnClickedButtonSendFile();
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 
 	// 自定义函数
@@ -66,11 +68,23 @@ public:
 	void CSerialCommunicationsDlg::initAllComboBoxes();
 	// 初始化MsComm组件
 	void CSerialCommunicationsDlg::initMsComm(CMscomm* pMscomm, const struct StructComboBoxOptions structComboBoxOptions);
-	
-	DECLARE_EVENTSINK_MAP()
-	// 当接收缓冲区超过限定值时 调用此函数
-	void OnComm();	struct StructComboBoxOptions getComboBoxSelectedOptions();
+	// 设置Static Text中的内容
+	void CSerialCommunicationsDlg::setStaticText(CStatic* cStatic, CString cstrText);
 	void CSerialCommunicationsDlg::resetMsComm();
+	struct StructComboBoxOptions getComboBoxSelectedOptions();
 	void CSerialCommunicationsDlg::scrollRxDataEditControlToBottom();
 	void CSerialCommunicationsDlg::updateStatusIndicator(const struct StructComboBoxOptions structComboBoxOptions);
+	void CSerialCommunicationsDlg::updateFileSendingStatusIndicator(int nCurrentPosition, int nFileSize);
+	// 获取CheckBox的选中状态
+	int  CSerialCommunicationsDlg::getCheckBoxStatus(int nID);
+	// 正常发送数据
+	void CSerialCommunicationsDlg::normalTransmitData();
+	// hex发送数据
+	void CSerialCommunicationsDlg::hexTransmitData();
+
+	// MsComm组件当接收缓冲区超过限定值时 调用此函数
+	DECLARE_EVENTSINK_MAP();
+	void OnComm();
+	afx_msg void OnBnClickedCheckHexTransmit();
+	afx_msg void OnEnChangeEditTxdata();
 };
