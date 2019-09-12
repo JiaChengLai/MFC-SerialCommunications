@@ -167,4 +167,22 @@ public:
 			}
 		}
 	}
+
+	static int combineTwoDecInt(int nNum1, int nNum2)
+	{
+		nNum1 <<= 4;// 左移4位
+		return nNum1 | nNum2;
+	}
+
+	// 将字符的ASCII码转化为对应的十进制值
+	static int convertDecInt(char ch)
+	{
+		if ((ch >= '0') && (ch <= '9'))
+			return ch - 0x30;
+		else if ((ch >= 'A') && (ch <= 'F'))
+			return ch - 'A' + 10;
+		else if ((ch >= 'a') && (ch <= 'f'))
+			return ch - 'a' + 10;
+		else return (-1);
+	}
 };

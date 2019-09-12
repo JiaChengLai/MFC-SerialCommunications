@@ -85,6 +85,7 @@ BEGIN_MESSAGE_MAP(CSerialCommunicationsDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_SEND_FILE, &CSerialCommunicationsDlg::OnBnClickedButtonSendFile)
 	ON_BN_CLICKED(IDC_CHECK_HEX_TRANSMIT, &CSerialCommunicationsDlg::OnBnClickedCheckHexTransmit)
 	ON_EN_CHANGE(IDC_EDIT_TXDATA, &CSerialCommunicationsDlg::OnEnChangeEditTxdata)
+	ON_BN_CLICKED(IDC_CHECK_HEX_DISPLAY, &CSerialCommunicationsDlg::OnBnClickedCheckHexDisplay)
 END_MESSAGE_MAP()
 
 // CSerialCommunicationsDlg 消息处理程序
@@ -316,56 +317,64 @@ void CSerialCommunicationsDlg::normalTransmitData()
 	scrollRxDataEditControlToBottom();
 }
 
-// hex发送数据
+// Hex发送数据
 void CSerialCommunicationsDlg::hexTransmitData()
 {
 	UpdateData(TRUE);
 	int nStrLength = m_edit_txdata.GetLength();
-	if (nStrLength % 2 == 1 && nStrLength != 1)// 若字符个数为奇数且不为1
+
+	CString csTxData;
+	if (nStrLength % 2 == 1)// 若字符个数为奇数
 	{
 		nStrLength = nStrLength - 1;
-		CString csTxData = m_edit_txdata.Left(nStrLength);// 截取掉最右边的一个字符 使字符个数变成偶数
-		csTxData.Trim();// 去掉所有空格
+		csTxData = m_edit_txdata.Left(nStrLength);// 截取掉最右边的一个字符 使字符个数变成偶数
 
-		// 每隔2个字符插入一个空格
-		int nIndex = 2;// 初始索引为2
-		for (int i = 0; i < nStrLength / 2 - 1; i++)// 插入n/2-1个空格
-		{
-			csTxData.Insert(nIndex, _T(" "));
-			nIndex = nIndex + 2 + 1;// 由于每隔2个字符插入一个空格，所以要多隔一个字符插入空格
-		}
-
-		int nTxDataLength = csTxData.GetLength();
-		BYTE* pbyteTxData = (BYTE*)malloc(nTxDataLength * sizeof(BYTE));
-		BYTE* pbyteHexData = (BYTE*)malloc(nTxDataLength / 2 * sizeof(BYTE));
-
-		for (int i = 0; i < nTxDataLength; i++)
-		{
-			pbyteTxData[i] = (BYTE)csTxData.GetBuffer(0)[i];
-		}
-
-		int nHexDataBufLength = 0;
-		Utils::StringtoHex(pbyteTxData, nTxDataLength, pbyteHexData, &nHexDataBufLength);//将字符串转化为字节数据
-
-		CByteArray hexDataBuf;
-		hexDataBuf.SetSize(nHexDataBufLength);
-		for (int i = 0; i < nHexDataBufLength; i++)
-		{
-			hexDataBuf.SetAt(i, pbyteHexData[i]);
-		}
-
-		// 发送格式化好的数据
-		m_mscomm.put_Output(COleVariant(hexDataBuf));
-
-		// 更新 所发送数据 到 接收数据框
-		m_edit_rxdata += Utils::initTransmitDeclaration() + COleVariant(hexDataBuf) + _T("□\r\n");
-		UpdateData(FALSE);
-		scrollRxDataEditControlToBottom();
 	}
-	else if (nStrLength % 2 == 0 && nStrLength != 2)// 若字符个数为偶数且不为0
+	else if (nStrLength % 2 == 0 && nStrLength != 0)
 	{
-
+		csTxData = m_edit_txdata;
 	}
+	else// 若字符个数为0
+	{
+		return;
+	}
+	csTxData.Trim();// 去掉所有空格
+
+	// 每隔2个字符插入一个空格
+	int nIndex = 2;// 初始索引为2
+	for (int i = 0; i < nStrLength / 2; i++)// 插入n/2个空格(尾部也有一个空格)
+	{
+		csTxData.Insert(nIndex, _T(" "));
+		nIndex = nIndex + 2 + 1;// 由于每隔2个字符插入一个空格，所以要多隔一个字符插入空格
+	}
+
+	// 将字符转化为16进制
+	int nTxDataLength = csTxData.GetLength();// 字符数量(含空格)
+	int nRealTxDataLength = nTxDataLength * 2 / 3;// 字符数量(不含空格),每两个位一个空格，故乘上2/3为实际字符数
+	BYTE* pbyteHexData = (BYTE*)malloc(nRealTxDataLength / 2 * sizeof(BYTE));// 用于存放最终的16进制数据
+
+	USES_CONVERSION;
+	char* pchTxData = T2A(csTxData);
+
+	for (int i = 0, j = 0; i < nTxDataLength; i = i + 3, j++)
+	{
+		pbyteHexData[j] = (unsigned char)Utils::combineTwoDecInt(Utils::convertDecInt(pchTxData[i]), Utils::convertDecInt(pchTxData[i + 1]));
+	}
+
+	CByteArray hexDataBuf;
+	hexDataBuf.SetSize(nRealTxDataLength / 2);
+	for (int i = 0; i < nRealTxDataLength / 2; i++)
+	{
+		hexDataBuf.SetAt(i, pbyteHexData[i]);
+	}
+
+	// 发送格式化好的数据
+	m_mscomm.put_Output(COleVariant(hexDataBuf));
+
+	// 更新 所发送数据 到 接收数据框
+	m_edit_rxdata += Utils::initTransmitDeclaration() + COleVariant(hexDataBuf) + _T("□\r\n");
+	UpdateData(FALSE);
+	scrollRxDataEditControlToBottom();
 }
 
 // 清除发送按钮->点击事件
@@ -567,7 +576,7 @@ void CSerialCommunicationsDlg::resetMsComm()
 }
 
 /*----------------------MsComm----------------------*/
-// hex发送CheckBox->点击事件
+// Hex发送 CheckBox->点击事件
 void CSerialCommunicationsDlg::OnBnClickedCheckHexTransmit()
 {
 	if (BST_CHECKED == getCheckBoxStatus(IDC_CHECK_HEX_TRANSMIT))// 若Hex发送
@@ -582,9 +591,41 @@ void CSerialCommunicationsDlg::OnBnClickedCheckHexTransmit()
 	}
 }
 
+
+
 // 获取CheckBox的选中状态
 int  CSerialCommunicationsDlg::getCheckBoxStatus(int nID)
 {
 	return ((CButton*)GetDlgItem(nID))->GetCheck();
 }
 
+
+// Hex显示 CheckBox->点击事件
+void CSerialCommunicationsDlg::OnBnClickedCheckHexDisplay()
+{
+	int nSelected = MessageBox(_T("注意！！！！！！！！\r\n已显示的时间戳和发送数据的显示可能将会丢失！\r\n时间戳显示将会从新的数据开始。"), _T("警告"), MB_OKCANCEL);
+	if (nSelected == IDCANCEL)// 若点击"取消"
+	{
+		// 点击取消后 恢复CheckBox的之前选中状态 
+		int nCurrentCheckStatus = getCheckBoxStatus(IDC_CHECK_HEX_DISPLAY);
+		nCurrentCheckStatus = nCurrentCheckStatus == 1 ? 0 : 1;
+		((CButton*)GetDlgItem(IDC_CHECK_HEX_DISPLAY))->SetCheck(nCurrentCheckStatus);
+		return;
+	}
+	else// 若切换当前显示模式
+	{
+		// 清空接收数据区数据
+		m_edit_rxdata = "";
+		UpdateData(FALSE);
+	}
+
+	if (BST_CHECKED == getCheckBoxStatus(IDC_CHECK_HEX_DISPLAY))// 若Hex显示
+	{
+		bIsHexDisplayChecked = true;
+
+	}
+	else
+	{
+		bIsHexDisplayChecked = false;
+	}
+}

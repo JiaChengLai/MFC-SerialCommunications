@@ -87,4 +87,5 @@ public:
 	void OnComm();
 	afx_msg void OnBnClickedCheckHexTransmit();
 	afx_msg void OnEnChangeEditTxdata();
+	afx_msg void OnBnClickedCheckHexDisplay();
 };
