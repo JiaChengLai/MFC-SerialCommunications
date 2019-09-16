@@ -32,6 +32,7 @@
 bool bIsOpen = false;// 串口是否已开启
 bool bIsHexTransmitChecked = false;// Hex发送是否选中
 bool bIsHexDisplayChecked = false;// Hex显示是否选中
+bool bIsStopSendingFile = false;// 是否停止发送文件
 
 // 界面上所有ComboBox选项值
 struct StructComboBoxOptions {
@@ -41,7 +42,6 @@ struct StructComboBoxOptions {
 	CString stop_bits = _T("1");
 	CString parity = _T("n");
 } structComboBoxOptions;
-
 
 // CSerialCommunicationsDlg 对话框
 CSerialCommunicationsDlg::CSerialCommunicationsDlg(CWnd* pParent /*=nullptr*/)
@@ -86,6 +86,7 @@ BEGIN_MESSAGE_MAP(CSerialCommunicationsDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_CHECK_HEX_TRANSMIT, &CSerialCommunicationsDlg::OnBnClickedCheckHexTransmit)
 	ON_EN_CHANGE(IDC_EDIT_TXDATA, &CSerialCommunicationsDlg::OnEnChangeEditTxdata)
 	ON_BN_CLICKED(IDC_CHECK_HEX_DISPLAY, &CSerialCommunicationsDlg::OnBnClickedCheckHexDisplay)
+	ON_BN_CLICKED(IDC_BUTTON_STOP_SEND_FILE, &CSerialCommunicationsDlg::OnBnClickedButtonStopSendFile)
 END_MESSAGE_MAP()
 
 // CSerialCommunicationsDlg 消息处理程序
@@ -200,7 +201,6 @@ void CSerialCommunicationsDlg::OnCbnSelchangeComboPort()
 {
 	resetMsComm();
 }
-
 
 // 波特率ComboBox->选择事件
 void CSerialCommunicationsDlg::OnCbnSelchangeComboBaudRate()
@@ -358,7 +358,7 @@ void CSerialCommunicationsDlg::hexTransmitData()
 
 	for (int i = 0, j = 0; i < nTxDataLength; i = i + 3, j++)
 	{
-		pbyteHexData[j] = (unsigned char)Utils::combineTwoDecInt(Utils::convertDecInt(pchTxData[i]), Utils::convertDecInt(pchTxData[i + 1]));
+		pbyteHexData[j] = (unsigned char)Utils::combineTwoInt(Utils::convertAcsiiToHex(pchTxData[i]), Utils::convertAcsiiToHex(pchTxData[i + 1]));
 	}
 
 	CByteArray hexDataBuf;
@@ -372,7 +372,14 @@ void CSerialCommunicationsDlg::hexTransmitData()
 	m_mscomm.put_Output(COleVariant(hexDataBuf));
 
 	// 更新 所发送数据 到 接收数据框
-	m_edit_rxdata += Utils::initTransmitDeclaration() + COleVariant(hexDataBuf) + _T("□\r\n");
+	if (bIsHexDisplayChecked)
+	{
+		m_edit_rxdata += Utils::initTransmitDeclaration() + csTxData + _T("□\r\n");
+	}
+	else
+	{
+		m_edit_rxdata += Utils::initTransmitDeclaration() + COleVariant(hexDataBuf) + _T("□\r\n");
+	}
 	UpdateData(FALSE);
 	scrollRxDataEditControlToBottom();
 }
@@ -380,15 +387,13 @@ void CSerialCommunicationsDlg::hexTransmitData()
 // 清除发送按钮->点击事件
 void CSerialCommunicationsDlg::OnBnClickedButtonClearTxdata()
 {
-	m_edit_txdata = "";
-	UpdateData(FALSE);
+	clearTxData();
 }
 
 // 清除接收按钮->点击事件
 void CSerialCommunicationsDlg::OnBnClickedButtonClearRxdata()
 {
-	m_edit_rxdata = "";
-	UpdateData(FALSE);
+	clearRxData();
 }
 
 // 打开文件按钮->点击事件
@@ -401,7 +406,6 @@ void CSerialCommunicationsDlg::OnBnClickedButtonOpenFile()
 	{
 		cstrReadFilePathName = fileDlg.GetPathName();// 得到完整的文件名和目录名拓展名  
 		GetDlgItem(IDC_EDIT_FILE_PATH)->SetWindowText(cstrReadFilePathName);// 显示文件路径到界面  
-		//CString filename = fileDlg.GetFileName();
 	}
 
 	// 读取文件内容并显示到界面上
@@ -419,8 +423,19 @@ void CSerialCommunicationsDlg::OnBnClickedButtonOpenFile()
 	}
 	else {// 文件大小小于4000KB，显示文件全部内容
 		cstrHead.Format(_T("文件大小:%d字节,下面是预览的前%d字节内容:\r\n\r\n"), lFileSize, lFileSize);
+
+		FILE* fp;
+		if ((fp = fopen(chReadFilePathName, "r")) == NULL)
+		{
+			exit(EXIT_FAILURE);
+		}
+
+		CString cstrTemp;
 		m_edit_rxdata = cstrHead;
-		Utils::readFileToEditControl(chReadFilePathName, &m_edit_rxdata, 0);
+		while ((cstrTemp = Utils::readOneLineFromFile(fp)) != " ")
+		{
+			m_edit_rxdata += cstrTemp;
+		}
 	}
 	UpdateData(FALSE);
 }
@@ -428,6 +443,13 @@ void CSerialCommunicationsDlg::OnBnClickedButtonOpenFile()
 // 发送文件按钮->点击事件
 void CSerialCommunicationsDlg::OnBnClickedButtonSendFile()
 {
+	// 判断是否已经开启串口
+	if (!bIsOpen)
+	{
+		MessageBox(_T("串口尚未打开，请先打开串口！"));
+		return;
+	}
+
 	// 获得打开文件的路径
 	CString cstrReadFilePathName;
 	GetDlgItem(IDC_EDIT_FILE_PATH)->GetWindowTextW(cstrReadFilePathName);
@@ -435,19 +457,56 @@ void CSerialCommunicationsDlg::OnBnClickedButtonSendFile()
 	if (cstrReadFilePathName.Trim() == "")
 	{
 		MessageBox(_T("请输入要打开文件的路径！"));
-	}
-	else {
-		// 开始发送文件
-		USES_CONVERSION;// 声明标识符
-		char* chReadFilePathName = T2A(cstrReadFilePathName);
-
-		// 创建新的线程来发送文件
-		std::thread threadSendingFile(Utils::readFileToEditControl, chReadFilePathName, &m_edit_rxdata, 1);
-		threadSendingFile.join();
+		return;
 	}
 
+	// 开始发送文件
+	bIsStopSendingFile = false;
+	AfxBeginThread((AFX_THREADPROC)ThreadSendingFile, this);// 启动线程
 }
 
+// 发送文件线程
+UINT CSerialCommunicationsDlg::ThreadSendingFile(LPVOID param)
+{
+	CSerialCommunicationsDlg* pCSerialCommunicationsDlg = (CSerialCommunicationsDlg*)param;
+	// 获得当前打开的文件名
+	CString cstrFilePathNmae;
+	pCSerialCommunicationsDlg->GetDlgItem(IDC_EDIT_FILE_PATH)->GetWindowTextW(cstrFilePathNmae);
+	USES_CONVERSION;
+	char* chReadFilePathName = T2A(cstrFilePathNmae);
+
+	// 打开文件并读取行发送
+	FILE* fp;
+	if ((fp = fopen(chReadFilePathName, "r")) == NULL)
+	{
+		exit(EXIT_FAILURE);
+	}
+
+	CString cstrTemp;
+	while ((cstrTemp = Utils::readOneLineFromFile(fp)) != " " && !bIsStopSendingFile)
+	{
+		pCSerialCommunicationsDlg->outPutMessage(cstrTemp);// 向串口发送消息
+		pCSerialCommunicationsDlg->updateFileSendingStatusIndicator((double)ftell(fp), (double)Utils::getFileSize(chReadFilePathName));// 更新状态指示器
+	}
+	pCSerialCommunicationsDlg->updateFileSendingStatusIndicator((double)ftell(fp), (double)Utils::getFileSize(chReadFilePathName));// 更新状态指示器
+
+    // 显示发送完毕/取消发送
+	if (bIsStopSendingFile)
+	{
+		pCSerialCommunicationsDlg->GetDlgItem(IDC_EDIT_RXDATA)->SetWindowTextW(_T("已取消发送！"));
+	}
+	else
+	{
+		pCSerialCommunicationsDlg->GetDlgItem(IDC_EDIT_RXDATA)->SetWindowTextW(_T("发送完毕！"));
+	}
+	return 0;
+}
+
+// 停止发送文件按钮->点击事件
+void CSerialCommunicationsDlg::OnBnClickedButtonStopSendFile()
+{
+	bIsStopSendingFile = true;
+}
 /*----------------------Edit Control----------------------*/
 // 改变 数据接收框 背景色为白色
 HBRUSH CSerialCommunicationsDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
@@ -490,8 +549,21 @@ void CSerialCommunicationsDlg::OnEnChangeEditTxdata()
 			UpdateData(FALSE);
 			MessageBox(_T("不是有效的HEX字符组合(\"0-9\",\"A-F\",\"a-f\",\" \")!\r\n每两个字符一个空格"));
 		}
-
 	}
+}
+
+// 清空接收数据框
+void CSerialCommunicationsDlg::clearRxData()
+{
+	m_edit_rxdata = "";
+	UpdateData(FALSE);
+}
+
+// 清空发送数据框
+void CSerialCommunicationsDlg::clearTxData()
+{
+	m_edit_txdata = "";
+	UpdateData(FALSE);
 }
 /*----------------------Static Text----------------------*/
 // 更新状态指示器信息
@@ -503,10 +575,10 @@ void CSerialCommunicationsDlg::updateStatusIndicator(const struct StructComboBox
 }
 
 // 更新文件发送指示器
-void CSerialCommunicationsDlg::updateFileSendingStatusIndicator(int nCurrentPosition, int nFileSize)
+void CSerialCommunicationsDlg::updateFileSendingStatusIndicator(double nCurrentPosition, double nFileSize)
 {
 	CString csStatusIndicator;
-	csStatusIndicator.Format(_T("文件发送指示器：当前进度%.2f%%"), (double)(nCurrentPosition / nFileSize * 100));
+	csStatusIndicator.Format(_T("文件发送指示器：当前进度%.2f%%"), (nCurrentPosition / nFileSize) * 100);
 	setStaticText(&m_static_file_status_indicator, csStatusIndicator);
 }
 // 设置Static Text中的内容
@@ -535,33 +607,78 @@ END_EVENTSINK_MAP()
 // 当接收缓冲区超过限定值时 调用此函数
 void CSerialCommunicationsDlg::OnComm()
 {
-	VARIANT variant_inp;
-	COleSafeArray safearray_inp;
-	LONG len, i;
-	unsigned char rxdata[2048];
-	if (m_mscomm.get_CommEvent() == 2) // 若接收缓冲区内有字符     
+	if (m_mscomm.get_CommEvent() != 2) // 若缓冲区中无超过设定值数量的字符     
 	{
-		variant_inp = m_mscomm.get_Input();// 读缓冲区  
-		safearray_inp = variant_inp;// VARIANT型变量转换为ColeSafeArray型变量
-		len = safearray_inp.GetOneDimSize();// 得到缓冲区字符有效数据长度        
-
-
-		CString cstrTemp;
-		m_edit_rxdata += Utils::initReceiveDeclaration();
-
-		// 数组转换为Cstring型变量
-		for (i = 0; i < len; i++)
-		{
-			safearray_inp.GetElement(&i, &(rxdata[i]));// 将数据从safearray_inp放入rxdata数组中
-			cstrTemp.Format(_T("%c"), rxdata[i]); // 转CString   
-			m_edit_rxdata += CStringW(cstrTemp); // 数据加入接收框    
-		}
-		m_edit_rxdata += "\r\n"; // 接收数据换行
+		return;
 	}
+
+	// 若缓冲区中有超过设定值数量的字符
+	VARIANT variant_inp = m_mscomm.get_Input();// 读缓冲区  
+	COleSafeArray safearray_inp = variant_inp;// VARIANT型变量转换为ColeSafeArray型变量
+	LONG len = safearray_inp.GetOneDimSize();// 得到缓冲区字符有效数据长度
+
+	if (bIsHexDisplayChecked)
+	{
+		hexDisplayData(safearray_inp, len);// hex显示数据
+	}
+	else
+	{
+		normalDisplayData(safearray_inp, len);// 正常显示数据
+	}
+}
+
+// 正常显示数据
+void CSerialCommunicationsDlg::normalDisplayData(COleSafeArray safearray_inp, LONG lLen)
+{
+	BYTE* rxdata = (BYTE*)malloc((lLen + 1) * sizeof(BYTE));// 多申请一个Byte用于存放空字符
+
+	// 从COleSafeArray中将数据拿到rxdata数组中添加空字符
+	LONG i;
+	for (i = 0; i < lLen; i++)
+	{
+		safearray_inp.GetElement(&i, &(rxdata[i]));// 将数据从safearray_inp放入rxdata数组中
+	}
+	rxdata[lLen] = '\0';
+
+
+	// 每行接收数据组成：接收头（[08:54:51.493]收←◆content） + 接收到的数据 + 换行符
+	m_edit_rxdata += Utils::initReceiveDeclaration();
+	m_edit_rxdata += CStringW(CString(rxdata));
+	m_edit_rxdata += "\r\n";
 
 	UpdateData(FALSE);
 	scrollRxDataEditControlToBottom();
 }
+
+// Hex显示数据 
+// 转化为对应的Hex字符
+void CSerialCommunicationsDlg::hexDisplayData(COleSafeArray safearray_inp, LONG lLen)
+{
+	BYTE* rxdata = (BYTE*)malloc((lLen * 3 + 1) * sizeof(BYTE));// 收到的hex进制值将前4位和后4位拆为2个int并转为对应的ASCII码且每两个字符中间间隔一个空格,所以这里乘上3
+
+	// 从COleSafeArray中将数据拿到rxdata数组中添加空字符
+	LONG i, j;
+	BYTE chTemp;
+	for (i = 0, j = 0; i < lLen; i++, j += 3)
+	{
+		safearray_inp.GetElement(&i, &chTemp);// 将数据从safearray_inp放入chTemp中再进行拆分
+		int* pnTemp = Utils::splitUpByte(chTemp);
+		rxdata[j] = Utils::convertHexToAcsii(*pnTemp);
+		rxdata[j + 1] = Utils::convertHexToAcsii(*(pnTemp + 1));
+		rxdata[j + 2] = ' ';// 每两个字符间隔一个空格
+	}
+	rxdata[lLen * 3] = '\0';
+
+
+	// 每行接收数据组成：接收头（[08:54:51.493]收←◆content） + 接收到的数据 + 换行符
+	m_edit_rxdata += Utils::initReceiveDeclaration();
+	m_edit_rxdata += CStringW(CString(rxdata));
+	m_edit_rxdata += "\r\n";
+
+	UpdateData(FALSE);
+	scrollRxDataEditControlToBottom();
+}
+
 
 // 重新设置MsComm组件配置
 void CSerialCommunicationsDlg::resetMsComm()
@@ -575,30 +692,26 @@ void CSerialCommunicationsDlg::resetMsComm()
 	}
 }
 
-/*----------------------MsComm----------------------*/
+// 向串口发送数据
+void CSerialCommunicationsDlg::outPutMessage(CString cstrMessage)
+{
+	m_mscomm.put_Output(COleVariant(cstrMessage));
+}
+
+/*----------------------CheckBox----------------------*/
 // Hex发送 CheckBox->点击事件
 void CSerialCommunicationsDlg::OnBnClickedCheckHexTransmit()
 {
 	if (BST_CHECKED == getCheckBoxStatus(IDC_CHECK_HEX_TRANSMIT))// 若Hex发送
 	{
 		bIsHexTransmitChecked = true;
-		m_edit_txdata = "";
-		UpdateData(FALSE);
+		clearTxData();
 	}
 	else
 	{
 		bIsHexTransmitChecked = false;
 	}
 }
-
-
-
-// 获取CheckBox的选中状态
-int  CSerialCommunicationsDlg::getCheckBoxStatus(int nID)
-{
-	return ((CButton*)GetDlgItem(nID))->GetCheck();
-}
-
 
 // Hex显示 CheckBox->点击事件
 void CSerialCommunicationsDlg::OnBnClickedCheckHexDisplay()
@@ -614,18 +727,21 @@ void CSerialCommunicationsDlg::OnBnClickedCheckHexDisplay()
 	}
 	else// 若切换当前显示模式
 	{
-		// 清空接收数据区数据
-		m_edit_rxdata = "";
-		UpdateData(FALSE);
+		clearRxData();// 清空接收数据区数据
 	}
 
 	if (BST_CHECKED == getCheckBoxStatus(IDC_CHECK_HEX_DISPLAY))// 若Hex显示
 	{
 		bIsHexDisplayChecked = true;
-
 	}
 	else
 	{
 		bIsHexDisplayChecked = false;
 	}
+}
+
+// 获取CheckBox的选中状态
+int  CSerialCommunicationsDlg::getCheckBoxStatus(int nID)
+{
+	return ((CButton*)GetDlgItem(nID))->GetCheck();
 }

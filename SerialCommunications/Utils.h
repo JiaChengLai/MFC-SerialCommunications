@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <sys/stat.h>
 
-#define BUFFER_SIZE 2048
+#define BUFFER_SIZE 4096
 
 class Utils
 {
@@ -31,48 +31,58 @@ public:
 		return st;
 	}
 
-	// 读取文件全部内容到EditControl中->fgets()实现 
-	// nMode当前模式 0-仅浏览 1-浏览并发送
-	static CString* readFileToEditControl(char* pchFilePath, CString* cstrData, int nMode)
+	// 从文件中读取完整的一行
+	static CString readOneLineFromFile(FILE* fp)
 	{
 		char chBuf[BUFFER_SIZE];
-		FILE* fp;
 		int nLen;
-		int nFileSize = getFileSize(pchFilePath);
 
-		if ((fp = fopen(pchFilePath, "r")) == NULL)
-		{
-			exit(EXIT_FAILURE);
-		}
-
-		*cstrData = "";
 		// 最多读取BUFFER_SIZE-3个字符 空出3个位置用于放'\r''\n''\0'
-		while (fgets(chBuf, BUFFER_SIZE - 2, fp) != NULL)
+		if (fgets(chBuf, BUFFER_SIZE - 2, fp) != NULL)
 		{
-			nLen = strlen(chBuf);
-			if (chBuf[nLen - 1] == '\n')// 如果是因为读到了换行符而结束
-			{
-				if (nMode == 1)// 若为发送模式每行指令头部添加发送声明
-				{
-					*cstrData = *cstrData + initTransmitDeclaration();
-					//CSerialCommunicationsDlg cs;
-					//cs.updateFileSendingStatusIndicator(ftell(fp), nFileSize);
-				}
 
+			nLen = strlen(chBuf);
+			if (chBuf[nLen - 1] == '\n')// 若数组的倒数第二个字符为换行符 则读取了完整的一行
+			{
 				// 将当前位和下两位替换成'\r''\n''\0'
 				chBuf[nLen - 1] = '\r';
 				chBuf[nLen] = '\n';
 				chBuf[nLen + 1] = '\0';
+				return CString(chBuf);
 			}
-
-			*cstrData = *cstrData + CString(chBuf);
-			CSerialCommunicationsDlg cs;
-			cs.UpdateData(FALSE);
+			else// 没有读取完完整的一行 或 文件已读取完毕
+			{
+				if (feof(fp) != 0)// 若文件已读取完毕
+				{
+					return CString(chBuf);
+				}
+				CString cstrOneLine = CString(chBuf);
+				while (fgets(chBuf, BUFFER_SIZE - 2, fp) != NULL)// 若没有读取完完整的一行则继续读取
+				{
+					nLen = strlen(chBuf);
+					if (chBuf[nLen - 2] == '\n')// 若数组的倒数第二个字符为换行符 则读取了完整的一行
+					{
+						// 将当前位和下两位替换成'\r''\n''\0'
+						chBuf[nLen - 1] = '\r';
+						chBuf[nLen] = '\n';
+						chBuf[nLen + 1] = '\0';
+						return cstrOneLine + CString(chBuf);
+					}
+					else
+					{
+						cstrOneLine += CString(chBuf);
+					}
+				}
+			}
 		}
-		return cstrData;
+		else// 若文件读完了 则返回" "
+		{
+			return CString(" ");
+		}
 	}
 
-	// 从文本文件的指定位置读取指定长度的字符->getchar()实现
+	// 从文本文件的指定位置读取指定长度的字符->getc()实现
+	// 用于显示超过4000字节大小的文件显示前4000字节文件内容
 	static char* readFileByPositionAndLength(char* pchFilePath, int nReadLength, long lPosition, long lOrigin)
 	{
 		// 多开辟一个字符 用于存放\0
@@ -132,57 +142,43 @@ public:
 		return csTemp;
 	}
 
-	// 将char转化为16进制
-	static void StringtoHex(BYTE* GB, int glen, BYTE* SB, int* slen)
-	{
-		int i;    //遍历输入的字符串
-		int a = 0;
-		char temp;   //接收字符，用来判断是否为空格，若是则跳过
-		char temp1, temp2;   //接收一个字节的两个字符  例如EB，则temp1='E',temp2 = 'B'
-		*slen = 0;  //输出的16进制字符串长度
-		for (i = 0; i < glen; i++)
-		{
-			temp = GB[i];
-			if (temp == ' ')
-				continue;
-
-			if (a == 0)
-				temp1 = GB[i];
-			if (a == 1)
-				temp2 = GB[i];
-			a++;
-
-			if (a == 2)
-			{
-				a = 0;
-				temp1 = temp1 - '0';
-				if (temp1 > 10)
-					temp1 = temp1 - 7;
-				temp2 = temp2 - '0';
-				if (temp2 > 10)
-					temp2 = temp2 - 7;
-
-				SB[*slen] = temp1 * 16 + temp2;
-				(*slen)++;
-			}
-		}
-	}
-
-	static int combineTwoDecInt(int nNum1, int nNum2)
+	// 合并2个int
+	static int combineTwoInt(int nNum1, int nNum2)
 	{
 		nNum1 <<= 4;// 左移4位
 		return nNum1 | nNum2;
 	}
 
-	// 将字符的ASCII码转化为对应的十进制值
-	static int convertDecInt(char ch)
+	// 将字符的ASCII码转化为对应的16进制值
+	static int convertAcsiiToHex(char ch)
 	{
+		char chRetsult = ' ';
 		if ((ch >= '0') && (ch <= '9'))
-			return ch - 0x30;
+			chRetsult = ch - '0';
 		else if ((ch >= 'A') && (ch <= 'F'))
-			return ch - 'A' + 10;
+			chRetsult = ch - 'A' + 10;
 		else if ((ch >= 'a') && (ch <= 'f'))
-			return ch - 'a' + 10;
-		else return (-1);
+			chRetsult = ch - 'a' + 10;
+		return chRetsult;
+	}
+
+	// 将1个Byte拆分为2个int
+	static int* splitUpByte(BYTE byte)
+	{
+		int* anResult = (int*)malloc(2 * sizeof(int));
+		anResult[0] = byte >> 4;// 取高4位
+		anResult[1] = byte & 0x0F;// 取低4位
+		return anResult;
+	}
+
+	// 将字符的16进制值转化为对应的ASCII码
+	static int convertHexToAcsii(int nNum)
+	{
+		int nResult = -1;
+		if ((nNum >= 0) && (nNum <= 9))
+			nResult = nNum + '0';
+		else if ((nNum >= 10) && (nNum <= 15))
+			nResult = nNum - 10 + 'A';
+		return nResult;
 	}
 };

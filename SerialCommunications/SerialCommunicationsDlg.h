@@ -49,14 +49,19 @@ public:
 	afx_msg void OnBnClickedButtonClearRxdata();
 	afx_msg void OnBnClickedButtonOpen();
 	afx_msg void OnBnClickedButtonTransmit();
+	afx_msg void OnBnClickedButtonOpenFile();
+	afx_msg void OnBnClickedButtonSendFile();
+	afx_msg void OnBnClickedCheckHexTransmit();
+	afx_msg void OnBnClickedCheckHexDisplay();
 
 	afx_msg void OnCbnSelchangeComboPort();
 	afx_msg void OnCbnSelchangeComboBaudRate();
 	afx_msg void OnCbnSelchangeComboDataBits();
 	afx_msg void OnCbnSelchangeComboStopBits();
 	afx_msg void OnCbnSelchangeComboParity();
-	afx_msg void OnBnClickedButtonOpenFile();
-	afx_msg void OnBnClickedButtonSendFile();
+
+	afx_msg void OnEnChangeEditTxdata();
+
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 
 	// 自定义函数
@@ -74,18 +79,28 @@ public:
 	struct StructComboBoxOptions getComboBoxSelectedOptions();
 	void CSerialCommunicationsDlg::scrollRxDataEditControlToBottom();
 	void CSerialCommunicationsDlg::updateStatusIndicator(const struct StructComboBoxOptions structComboBoxOptions);
-	void CSerialCommunicationsDlg::updateFileSendingStatusIndicator(int nCurrentPosition, int nFileSize);
+	void CSerialCommunicationsDlg::updateFileSendingStatusIndicator(double nCurrentPosition, double nFileSize);
 	// 获取CheckBox的选中状态
 	int  CSerialCommunicationsDlg::getCheckBoxStatus(int nID);
 	// 正常发送数据
 	void CSerialCommunicationsDlg::normalTransmitData();
 	// hex发送数据
 	void CSerialCommunicationsDlg::hexTransmitData();
+	// 正常显示数据
+	void CSerialCommunicationsDlg::normalDisplayData(COleSafeArray safearray_inp, LONG lLen);
+	// Hex显示数据
+	void CSerialCommunicationsDlg::hexDisplayData(COleSafeArray safearray_inp, LONG lLen);
+	// 发送文件线程
+	static UINT CSerialCommunicationsDlg::ThreadSendingFile(LPVOID param);
+	// 清空接收数据框
+	void CSerialCommunicationsDlg::clearRxData();
+	// 清空发送数据框
+	void CSerialCommunicationsDlg::clearTxData();
+	// 向串口发送数据
+	void CSerialCommunicationsDlg::outPutMessage(CString cstrMessage);
 
 	// MsComm组件当接收缓冲区超过限定值时 调用此函数
 	DECLARE_EVENTSINK_MAP();
 	void OnComm();
-	afx_msg void OnBnClickedCheckHexTransmit();
-	afx_msg void OnEnChangeEditTxdata();
-	afx_msg void OnBnClickedCheckHexDisplay();
+	afx_msg void OnBnClickedButtonStopSendFile();
 };
